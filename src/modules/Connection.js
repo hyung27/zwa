@@ -1,4 +1,4 @@
-const { default: makeWASocket, makeInMemoryStore, useMultiFileAuthState, jidDecode, getDevice, generateProfilePicture } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, makeInMemoryStore, makeCacheableSignalKeyStore, useMultiFileAuthState, jidDecode, getDevice, generateProfilePicture } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { Message, Calling, MsgDelete, UpdateStatus } = require('../parsing');
 const Connect = require('../utils/Connect');
@@ -24,15 +24,13 @@ module.exports = class Connection {
 
         const sock = makeWASocket({
             ...this.config,
-            auth: state,
-            getMessage: async (key) => (store ? (await store.loadMessage(key.remoteJid, key.id)).message || undefined : { conversation: 'ZWA' }),
-            patchMessageBeforeSending: (message) => {
-                const requiresPatch = !!(message.buttonsMessage || message.templateMessage || message.listMessage);
-                if (requiresPatch) {
-                    message = { viewOnceMessage: { message: { messageContextInfo: { deviceListMetadataVersion: 2, deviceListMetadata: {} }, ...message } } };
-                }
-                return message;
-            }
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, pino({
+                    level: "silent"
+                }))
+            },
+            getMessage: async (key) => (store ? (await store.loadMessage(key.remoteJid, key.id)).message || undefined : { conversation: 'ZWA' })
         });
 
         store.bind(sock.ev);
